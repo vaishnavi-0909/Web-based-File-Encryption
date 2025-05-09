@@ -1,6 +1,6 @@
 streamlit==1.40.1  # Web application framework
 pycryptodome  # For AES-GCM encryption
-opencv-python  # For QR code scanning
+opencv-python-headless  # For QR code scanning
 qrcode # For generating QR codes
 Pillow  # For image processing
 
