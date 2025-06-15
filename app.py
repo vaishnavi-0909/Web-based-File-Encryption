@@ -71,6 +71,7 @@ elif option == "Decrypt":
     qr_passkey = st.file_uploader("Upload the QR code for the passkey", type=["png", "jpg"])
     passkey_input = st.text_input("Enter the passkey used during encryption:", type="password")
 
+    # Initialize session state for attempts and lock_time
     if 'attempts' not in st.session_state:
         st.session_state.attempts = 0
     if 'lock_time' not in st.session_state:
@@ -79,23 +80,31 @@ elif option == "Decrypt":
     if st.button("Decrypt File"):
         current_time = time.time()
 
+        # Check if locked
         if st.session_state.attempts >= 3:
             if current_time - st.session_state.lock_time < 60:
                 st.warning("⏳ Too many failed attempts. Please wait 1 minute before retrying.")
                 st.stop()
             else:
-                st.session_state.attempts = 0
+                st.session_state.attempts = 0  # Reset attempts
 
+        # Common passkey validation function
         def is_strong_passkey(passkey):
             return (
-                len(passkey) >= 8 and
+                len(passkey) >= 10 and len(passkey) <= 20 and
                 re.search(r'[A-Za-z]', passkey) and
                 re.search(r'\d', passkey) and
                 re.search(r'[^A-Za-z0-9]', passkey)
             )
 
+        # Track invalid format as wrong attempt too
         if not is_strong_passkey(passkey_input):
-            st.error("❌ Passkey must be at least 8 characters and include letters, digits, and special characters.")
+            st.session_state.attempts += 1
+            if st.session_state.attempts >= 3:
+                st.session_state.lock_time = time.time()
+                st.error("❌ Too many incorrect attempts. Locked for 1 minute.")
+            else:
+                st.error(f"❌ Passkey must be 10–20 characters with letters, digits, and special characters. Attempts left: {3 - st.session_state.attempts}")
             st.stop()
 
         if not qr_file or not qr_passkey:
@@ -121,18 +130,21 @@ elif option == "Decrypt":
             stored_passkey, stored_aes_key = passkey_data.split("|")
             aes_key = bytes.fromhex(stored_aes_key)
 
+            # ✅ Now check if hashed passkey matches
             if hash_passkey(passkey_input).hex() == stored_passkey:
                 with open(encrypted_file_path, "rb") as enc_file:
                     encrypted_data = enc_file.read()
 
                 decrypted_data = decrypt_data(aes_key, encrypted_data)
 
+                # Save decrypted file — you can improve this to get the original extension
                 decrypted_file_path = encrypted_file_path.replace(".enc", ".dec")
                 with open(decrypted_file_path, "wb") as dec_file:
                     dec_file.write(decrypted_data)
 
-                st.session_state.attempts = 0
+                st.session_state.attempts = 0  # Reset on success
                 st.success("✅ Decryption successful!")
+
                 with open(decrypted_file_path, "rb") as file:
                     st.download_button("Download Decrypted File", file.read(), file_name="decrypted_output")
 
